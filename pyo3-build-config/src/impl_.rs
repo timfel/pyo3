@@ -143,6 +143,11 @@ impl InterpreterConfig {
                     See https://foss.heptapod.net/pypy/pypy/-/issues/3397 for more information."
                 );
             }
+        } else if self.implementation.is_graalpy() {
+            println!("cargo:rustc-cfg=GraalPy");
+            if self.abi3 {
+                warn!("GraalPy does not support abi3 so the build artifacts will be version-specific.");
+            }
         } else if self.abi3 {
             println!("cargo:rustc-cfg=Py_LIMITED_API");
         }
@@ -165,6 +170,7 @@ import sys
 from sysconfig import get_config_var, get_platform
 
 PYPY = platform.python_implementation() == "PyPy"
+GRAALPY = platform.python_implementation() == "GraalVM"
 
 # sys.base_prefix is missing on Python versions older than 3.3; this allows the script to continue
 # so that the version mismatch can be reported in a nicer way later.
@@ -194,7 +200,7 @@ SHARED = bool(get_config_var("Py_ENABLE_SHARED"))
 print("implementation", platform.python_implementation())
 print("version_major", sys.version_info[0])
 print("version_minor", sys.version_info[1])
-print("shared", PYPY or ANACONDA or WINDOWS or FRAMEWORK or SHARED)
+print("shared", PYPY or GRAALPY or ANACONDA or WINDOWS or FRAMEWORK or SHARED)
 print_if_set("ld_version", get_config_var("LDVERSION"))
 print_if_set("libdir", get_config_var("LIBDIR"))
 print_if_set("base_prefix", base_prefix)
@@ -442,12 +448,18 @@ impl FromStr for PythonVersion {
 pub enum PythonImplementation {
     CPython,
     PyPy,
+    GraalPy,
 }
 
 impl PythonImplementation {
     #[doc(hidden)]
     pub fn is_pypy(self) -> bool {
         self == PythonImplementation::PyPy
+    }
+
+    #[doc(hidden)]
+    pub fn is_graalpy(self) -> bool {
+        self == PythonImplementation::GraalPy
     }
 }
 
@@ -456,6 +468,7 @@ impl Display for PythonImplementation {
         match self {
             PythonImplementation::CPython => write!(f, "CPython"),
             PythonImplementation::PyPy => write!(f, "PyPy"),
+            PythonImplementation::GraalPy => write!(f, "GraalVM"),
         }
     }
 }
@@ -466,6 +479,7 @@ impl FromStr for PythonImplementation {
         match s {
             "CPython" => Ok(PythonImplementation::CPython),
             "PyPy" => Ok(PythonImplementation::PyPy),
+            "GraalVM" => Ok(PythonImplementation::GraalPy),
             _ => bail!("unknown interpreter: {}", s),
         }
     }
@@ -1042,7 +1056,7 @@ fn default_lib_name_windows(
     abi3: bool,
     mingw: bool,
 ) -> String {
-    if abi3 && !implementation.is_pypy() {
+    if abi3 && !(implementation.is_pypy() || implementation.is_graalpy()) {
         WINDOWS_ABI3_LIB_NAME.to_owned()
     } else if mingw {
         // https://packages.msys2.org/base/mingw-w64-python
@@ -1072,6 +1086,7 @@ fn default_lib_name_unix(
                 format!("pypy{}-c", version.major)
             }
         }
+        PythonImplementation::GraalPy => format!("graalpy{}.{}", version.major, version.minor),
     }
 }
 
@@ -1178,7 +1193,7 @@ fn fixup_config_for_abi3(
     abi3_version: Option<PythonVersion>,
 ) -> Result<()> {
     // PyPy doesn't support abi3; don't adjust the version
-    if config.implementation.is_pypy() {
+    if config.implementation.is_pypy() || config.implementation.is_graalpy() {
         return Ok(());
     }
 
