@@ -25,7 +25,10 @@ fn ensure_auto_initialize_ok(interpreter_config: &InterpreterConfig) -> Result<(
         // TODO: PYO3_CI env is a hack to workaround CI with PyPy, where the `dev-dependencies`
         // currently cause `auto-initialize` to be enabled in CI.
         // Once MSRV is 1.51 or higher, use cargo's `resolver = "2"` instead.
-        if interpreter_config.implementation.is_pypy() && env::var_os("PYO3_CI").is_none() {
+        if (interpreter_config.implementation.is_pypy()
+            || interpreter_config.implementation.is_graalpy())
+            && env::var_os("PYO3_CI").is_none()
+        {
             bail!("the `auto-initialize` feature is not supported with PyPy");
         }
     }
