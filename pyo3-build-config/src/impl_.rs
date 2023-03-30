@@ -1589,7 +1589,7 @@ fn default_lib_name_unix(
                 format!("pypy{}-c", version.major)
             }
         }
-        PythonImplementation::GraalPy => format!("graalpy{}.{}", version.major, version.minor),
+        PythonImplementation::GraalPy => format!("python.graalpy231-{}{}-native-x86_64-linux", version.major, version.minor),
     }
 }
 
