@@ -1,9 +1,13 @@
 // Copyright (c) 2017-present PyO3 Project and Contributors
 
-use crate::err::{error_on_minusone, PyResult};
+#[cfg(not(GraalPy))]
+use crate::err::error_on_minusone;
+use crate::err::PyResult;
 use crate::ffi;
 use crate::types::PyString;
 use crate::{AsPyPointer, PyAny};
+#[cfg(GraalPy)]
+use std::os::raw::c_char;
 
 /// Represents a Python traceback.
 #[repr(transparent)]
@@ -53,8 +57,26 @@ impl PyTraceback {
             .import(intern!(py, "io"))?
             .getattr(intern!(py, "StringIO"))?
             .call0()?;
+        #[cfg(not(GraalPy))]
         let result = unsafe { ffi::PyTraceBack_Print(self.as_ptr(), string_io.as_ptr()) };
+        #[cfg(not(GraalPy))]
         error_on_minusone(py, result)?;
+        #[cfg(GraalPy)]
+        unsafe {
+            let py_locals = ffi::PyDict_New();
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("traceback".as_ptr().cast::<c_char>()), self.as_ptr());
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("stringio".as_ptr().cast::<c_char>()), string_io.as_ptr());
+            let result: PyResult<&PyAny> = py.from_owned_ptr_or_err(ffi::PyRun_StringFlags(
+                "__import__('traceback').print_tb(traceback, file=stringio)".as_ptr().cast::<c_char>(),
+                ffi::Py_eval_input,
+                ffi::PyEval_GetBuiltins(),
+                py_locals,
+                std::ptr::null_mut()
+            ));
+            if let Err(e) = result {
+                return Err(e);
+            }
+        };
         let formatted = string_io
             .getattr(intern!(py, "getvalue"))?
             .call0()?

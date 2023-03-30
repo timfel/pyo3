@@ -358,7 +358,7 @@ impl<'py> Python<'py> {
     /// If the [`auto-initialize`] feature is enabled and the Python runtime is not already
     /// initialized, this function will initialize it. See
     #[cfg_attr(
-        not(PyPy),
+        not(any(PyPy, GraalPy)),
         doc = "[`prepare_freethreaded_python`](crate::prepare_freethreaded_python)"
     )]
     #[cfg_attr(PyPy, doc = "`prepare_freethreaded_python`")]

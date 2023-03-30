@@ -27,6 +27,7 @@ pub unsafe fn noargs(
     args: *mut ffi::PyObject,
     f: for<'py> unsafe fn(Python<'py>, *mut ffi::PyObject) -> PyResult<*mut ffi::PyObject>,
 ) -> *mut ffi::PyObject {
+    #[cfg(not(GraalPy))]
     debug_assert!(args.is_null());
     trampoline_inner(|py| f(py, slf))
 }

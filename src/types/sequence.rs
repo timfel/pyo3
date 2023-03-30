@@ -10,6 +10,8 @@ use crate::types::{PyAny, PyList, PyString, PyTuple, PyType};
 use crate::{ffi, PyNativeType, ToPyObject};
 use crate::{AsPyPointer, IntoPyPointer, Py, Python};
 use crate::{FromPyObject, PyTryFrom};
+#[cfg(GraalPy)]
+use std::os::raw::c_char;
 
 /// Represents a reference to a Python object supporting the sequence protocol.
 #[repr(transparent)]
@@ -160,8 +162,9 @@ impl PySequence {
     /// This is equivalent to the Python statement `self[i1:i2] = v`.
     #[inline]
     pub fn set_slice(&self, i1: usize, i2: usize, v: &PyAny) -> PyResult<()> {
+        #[cfg(not(GraalPy))]
         unsafe {
-            err::error_on_minusone(
+            return err::error_on_minusone(
                 self.py(),
                 ffi::PySequence_SetSlice(
                     self.as_ptr(),
@@ -169,7 +172,26 @@ impl PySequence {
                     get_ssize_index(i2),
                     v.as_ptr(),
                 ),
-            )
+            );
+        }
+        #[cfg(GraalPy)]
+        unsafe {
+            let py_locals = ffi::PyDict_New();
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("self".as_ptr().cast::<c_char>()), self.as_ptr());
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("i1".as_ptr().cast::<c_char>()), ffi::PyLong_FromUnsignedLong(i1 as u64));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("i2".as_ptr().cast::<c_char>()), ffi::PyLong_FromUnsignedLong(i2 as u64));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("v".as_ptr().cast::<c_char>()), v.as_ptr());
+            let result: PyResult<&PyAny> = self.py().from_owned_ptr_or_err(ffi::PyRun_StringFlags(
+                "self[i1:i2] = v".as_ptr().cast::<c_char>(),
+                ffi::Py_file_input,
+                ffi::PyEval_GetBuiltins(),
+                py_locals,
+                std::ptr::null_mut()
+            ));
+            return match result {
+                Err(e) => Err(e),
+                Ok(_) => Ok(()),
+            };
         }
     }
 
@@ -178,18 +200,37 @@ impl PySequence {
     /// This is equivalent to the Python statement `del self[i1:i2]`.
     #[inline]
     pub fn del_slice(&self, i1: usize, i2: usize) -> PyResult<()> {
+        #[cfg(not(GraalPy))]
         unsafe {
             err::error_on_minusone(
                 self.py(),
                 ffi::PySequence_DelSlice(self.as_ptr(), get_ssize_index(i1), get_ssize_index(i2)),
             )
         }
+        #[cfg(GraalPy)]
+        unsafe {
+            let py_locals = ffi::PyDict_New();
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("self".as_ptr().cast::<c_char>()), self.as_ptr());
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("i1".as_ptr().cast::<c_char>()), ffi::PyLong_FromUnsignedLong(i1 as u64));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("i2".as_ptr().cast::<c_char>()), ffi::PyLong_FromUnsignedLong(i2 as u64));
+            let result: PyResult<&PyAny> = self.py().from_owned_ptr_or_err(ffi::PyRun_StringFlags(
+                "del self[i1:i2]".as_ptr().cast::<c_char>(),
+                ffi::Py_file_input,
+                ffi::PyEval_GetBuiltins(),
+                py_locals,
+                std::ptr::null_mut()
+            ));
+            return match result {
+                Err(e) => Err(e),
+                Ok(_) => Ok(()),
+            };
+        }
     }
 
     /// Returns the number of occurrences of `value` in self, that is, return the
     /// number of keys for which `self[key] == value`.
     #[inline]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     pub fn count<V>(&self, value: V) -> PyResult<usize>
     where
         V: ToPyObject,
@@ -228,13 +269,33 @@ impl PySequence {
     where
         V: ToPyObject,
     {
+        #[cfg(not(GraalPy))]
         let r =
             unsafe { ffi::PySequence_Index(self.as_ptr(), value.to_object(self.py()).as_ptr()) };
+        #[cfg(not(GraalPy))]
         if r == -1 {
             Err(PyErr::fetch(self.py()))
         } else {
             Ok(r as usize)
         }
+        #[cfg(GraalPy)]
+         unsafe {
+            let py_locals = ffi::PyDict_New();
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("self".as_ptr().cast::<c_char>()), self.as_ptr());
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("value".as_ptr().cast::<c_char>()), value.to_object(self.py()).as_ptr());
+            let result: PyResult<&PyAny> = self.py().from_owned_ptr_or_err(ffi::PyRun_StringFlags(
+                "self.index(value)".as_ptr().cast::<c_char>(),
+                ffi::Py_eval_input,
+                ffi::PyEval_GetBuiltins(),
+                py_locals,
+                std::ptr::null_mut()
+            ));
+            return match result {
+                Err(e) => Err(e),
+                Ok(r) => Ok(ffi::PyLong_AsLong(r.as_ptr()) as usize),
+            };
+        };
+        
     }
 
     /// Returns a fresh list based on the Sequence.
@@ -690,7 +751,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_seq_count() {
         Python::with_gil(|py| {
             let v: Vec<i32> = vec![1, 1, 2, 3, 5, 8];

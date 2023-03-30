@@ -5,9 +5,11 @@ use crate::err::{self, PyErr, PyResult};
 use crate::ffi::Py_ssize_t;
 use crate::types::{PyAny, PyList};
 use crate::{ffi, AsPyPointer, Python, ToPyObject};
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 use crate::{IntoPyPointer, PyObject};
 use std::ptr::NonNull;
+#[cfg(GraalPy)]
+use std::os::raw::c_char;
 
 /// Represents a Python `dict`.
 #[repr(transparent)]
@@ -21,11 +23,11 @@ pyobject_native_type!(
 );
 
 /// Represents a Python `dict_keys`.
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 #[repr(transparent)]
 pub struct PyDictKeys(PyAny);
 
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 pyobject_native_type_core!(
     PyDictKeys,
     ffi::PyDictKeys_Type,
@@ -33,11 +35,11 @@ pyobject_native_type_core!(
 );
 
 /// Represents a Python `dict_values`.
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 #[repr(transparent)]
 pub struct PyDictValues(PyAny);
 
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 pyobject_native_type_core!(
     PyDictValues,
     ffi::PyDictValues_Type,
@@ -45,11 +47,11 @@ pyobject_native_type_core!(
 );
 
 /// Represents a Python `dict_items`.
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 #[repr(transparent)]
 pub struct PyDictItems(PyAny);
 
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 pyobject_native_type_core!(
     PyDictItems,
     ffi::PyDictItems_Type,
@@ -69,7 +71,7 @@ impl PyDict {
     ///
     /// Returns an error on invalid input. In the case of key collisions,
     /// this keeps the last entry seen.
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     pub fn from_sequence(py: Python<'_>, seq: PyObject) -> PyResult<&PyDict> {
         unsafe {
             let dict = py.from_owned_ptr::<PyDict>(ffi::PyDict_New());
@@ -159,7 +161,7 @@ impl PyDict {
     /// returns `Ok(None)` if item is not present, or `Err(PyErr)` if an error occurs.
     ///
     /// To get a `KeyError` for non-existing keys, use `PyAny::get_item_with_error`.
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     pub fn get_item_with_error<K>(&self, key: K) -> PyResult<Option<&PyAny>>
     where
         K: ToPyObject,
@@ -236,9 +238,22 @@ impl PyDict {
     ///
     /// This is equivalent to the Python expression `list(dict.items())`.
     pub fn items(&self) -> &PyList {
+        #[cfg(not(GraalPy))]
         unsafe {
             self.py()
                 .from_owned_ptr::<PyList>(ffi::PyDict_Items(self.as_ptr()))
+        }
+        #[cfg(GraalPy)]
+        unsafe {
+            let py_locals = ffi::PyDict_New();
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("self".as_ptr().cast::<c_char>()), self.as_ptr());
+            return self.py().from_owned_ptr::<PyList>(ffi::PyRun_StringFlags(
+                "list(self.items())".as_ptr().cast::<c_char>(),
+                ffi::Py_eval_input,
+                ffi::PyEval_GetBuiltins(),
+                py_locals,
+                std::ptr::null_mut()
+            ));
         }
     }
 
@@ -440,9 +455,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     use crate::exceptions;
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     use crate::types::PyList;
     use crate::{types::PyTuple, Python, ToPyObject};
     use std::collections::{BTreeMap, HashMap};
@@ -461,7 +476,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_from_sequence() {
         Python::with_gil(|py| {
             let items = PyList::new(py, &vec![("a", 1), ("b", 2)]);
@@ -476,7 +491,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_from_sequence_err() {
         Python::with_gil(|py| {
             let items = PyList::new(py, &vec!["a", "b"]);
@@ -534,7 +549,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_get_item_with_error() {
         Python::with_gil(|py| {
             let mut v = HashMap::new();
@@ -893,7 +908,7 @@ mod tests {
         });
     }
 
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn abc_dict(py: Python<'_>) -> &PyDict {
         let mut map = HashMap::<&'static str, i32>::new();
         map.insert("a", 1);
@@ -903,7 +918,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn dict_keys_view() {
         Python::with_gil(|py| {
             let dict = abc_dict(py);
@@ -913,7 +928,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn dict_values_view() {
         Python::with_gil(|py| {
             let dict = abc_dict(py);
@@ -923,7 +938,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn dict_items_view() {
         Python::with_gil(|py| {
             let dict = abc_dict(py);

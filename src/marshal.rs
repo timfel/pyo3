@@ -4,8 +4,12 @@
 
 use crate::ffi;
 use crate::types::{PyAny, PyBytes};
-use crate::{AsPyPointer, FromPyPointer, PyResult, Python};
-use std::os::raw::{c_char, c_int};
+use crate::{AsPyPointer, PyResult, Python};
+#[cfg(not(GraalPy))]
+use crate::FromPyPointer;
+use std::os::raw::c_char;
+#[cfg(not(GraalPy))]
+use std::os::raw::c_int;
 
 /// The current version of the marshal binary format.
 pub const VERSION: i32 = 4;
@@ -31,9 +35,23 @@ pub const VERSION: i32 = 4;
 /// # });
 /// ```
 pub fn dumps<'a>(py: Python<'a>, object: &impl AsPyPointer, version: i32) -> PyResult<&'a PyBytes> {
+    #[cfg(not(GraalPy))]
     unsafe {
         let bytes = ffi::PyMarshal_WriteObjectToString(object.as_ptr(), version as c_int);
-        FromPyPointer::from_owned_ptr_or_err(py, bytes)
+        return FromPyPointer::from_owned_ptr_or_err(py, bytes);
+    }
+    #[cfg(GraalPy)]
+    unsafe {
+        let py_locals = ffi::PyDict_New();
+        ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("obj".as_ptr().cast::<c_char>()), object.as_ptr());
+        ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("version".as_ptr().cast::<c_char>()), ffi::PyLong_FromLong(version as i64));
+        return py.from_owned_ptr_or_err(ffi::PyRun_StringFlags(
+            "__import__('marshal').dumps(obj, version)".as_ptr().cast::<c_char>(),
+            ffi::Py_eval_input,
+            ffi::PyEval_GetBuiltins(),
+            py_locals,
+            std::ptr::null_mut()
+        ));
     }
 }
 
@@ -43,10 +61,23 @@ where
     B: AsRef<[u8]> + ?Sized,
 {
     let data = data.as_ref();
+    #[cfg(not(GraalPy))]
     unsafe {
         let c_str = data.as_ptr() as *const c_char;
         let object = ffi::PyMarshal_ReadObjectFromString(c_str, data.len() as isize);
         FromPyPointer::from_owned_ptr_or_err(py, object)
+    }
+    #[cfg(GraalPy)]
+    unsafe {
+        let py_locals = ffi::PyDict_New();
+        ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("data".as_ptr().cast::<c_char>()), ffi::PyBytes_FromStringAndSize(data.as_ptr() as *const c_char, data.len() as isize));
+        return py.from_owned_ptr_or_err(ffi::PyRun_StringFlags(
+            "__import__('marshal').loads(data)".as_ptr().cast::<c_char>(),
+            ffi::Py_eval_input,
+            ffi::PyEval_GetBuiltins(),
+            py_locals,
+            std::ptr::null_mut()
+        ));
     }
 }
 

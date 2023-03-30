@@ -12,6 +12,8 @@ use std::borrow::Cow;
 use std::cell::UnsafeCell;
 use std::ffi::CString;
 use std::os::raw::c_int;
+#[cfg(GraalPy)]
+use std::os::raw::c_char;
 
 mod err_state;
 mod impls;
@@ -573,8 +575,9 @@ impl PyErr {
             None => std::ptr::null_mut(),
             Some(obj) => obj.as_ptr(),
         };
+        #[cfg(not(GraalPy))]
         unsafe {
-            error_on_minusone(
+            return error_on_minusone(
                 py,
                 ffi::PyErr_WarnExplicit(
                     category.as_ptr(),
@@ -583,8 +586,29 @@ impl PyErr {
                     lineno,
                     module_ptr,
                     registry,
-                ),
-            )
+                )
+            );
+        }
+        #[cfg(GraalPy)]
+        unsafe {
+            let py_locals = ffi::PyDict_New();
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("message".as_ptr().cast::<c_char>()), ffi::PyUnicode_FromString(message.as_ptr().cast::<c_char>()));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("category".as_ptr().cast::<c_char>()), category.as_ptr());
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("filename".as_ptr().cast::<c_char>()), ffi::PyUnicode_FromString(filename.as_ptr().cast::<c_char>()));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("lineno".as_ptr().cast::<c_char>()), ffi::PyLong_FromLong(lineno as i64));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("module".as_ptr().cast::<c_char>()), ffi::PyUnicode_FromString(module_ptr.cast::<c_char>()));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("registry".as_ptr().cast::<c_char>()), registry);
+            let result: PyResult<&PyAny> = py.from_owned_ptr_or_err(ffi::PyRun_StringFlags(
+                "__import__('warnings').warn_explicit(message, category, filename, lineno, module=module, registry=registry)".as_ptr().cast::<c_char>(),
+                ffi::Py_eval_input,
+                ffi::PyEval_GetBuiltins(),
+                py_locals,
+                std::ptr::null_mut()
+            ));
+            return match result {
+                Err(e) => Err(e),
+                Ok(_) => Ok(()),
+            };
         }
     }
 
@@ -612,7 +636,10 @@ impl PyErr {
     /// Return the cause (either an exception instance, or None, set by `raise ... from ...`)
     /// associated with the exception, as accessible from Python through `__cause__`.
     pub fn cause(&self, py: Python<'_>) -> Option<PyErr> {
+        #[cfg(not(GraalPy))]
         let ptr = unsafe { ffi::PyException_GetCause(self.value(py).as_ptr()) };
+        #[cfg(GraalPy)]
+        let ptr = std::ptr::null_mut();
         let obj = unsafe { py.from_owned_ptr_or_opt::<PyAny>(ptr) };
         obj.map(Self::from_value)
     }

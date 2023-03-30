@@ -1,7 +1,10 @@
 // Copyright (c) 2017-present PyO3 Project and Contributors
 use crate::err::{PyErr, PyResult};
-use crate::{ffi, AsPyPointer, Py, PyAny, Python};
+use crate::{ffi, AsPyPointer, PyAny, Python};
+#[cfg(not(GraalPy))]
+use crate::Py;
 use std::os::raw::c_char;
+#[cfg(not(GraalPy))]
 use std::slice;
 
 /// Represents a Python `bytearray`.
@@ -44,6 +47,7 @@ impl PyByteArray {
     /// })
     /// # }
     /// ```
+    #[cfg(not(GraalPy))]
     pub fn new_with<F>(py: Python<'_>, len: usize, init: F) -> PyResult<&PyByteArray>
     where
         F: FnOnce(&mut [u8]) -> PyResult<()>,
@@ -65,6 +69,7 @@ impl PyByteArray {
 
     /// Creates a new Python `bytearray` object from another Python object that
     /// implements the buffer protocol.
+    #[cfg(not(GraalPy))]
     pub fn from<'p, I>(py: Python<'p>, src: &'p I) -> PyResult<&'p PyByteArray>
     where
         I: AsPyPointer,
@@ -89,6 +94,7 @@ impl PyByteArray {
     /// # Safety
     ///
     /// See the safety requirements of [`PyByteArray::as_bytes`] and [`PyByteArray::as_bytes_mut`].
+    #[cfg(not(GraalPy))]
     pub fn data(&self) -> *mut u8 {
         unsafe { ffi::PyByteArray_AsString(self.as_ptr()) as *mut u8 }
     }
@@ -188,6 +194,7 @@ impl PyByteArray {
     ///     println!("{:?}", slice[0]);
     /// }
     /// ```
+    #[cfg(not(GraalPy))]
     pub unsafe fn as_bytes(&self) -> &[u8] {
         slice::from_raw_parts(self.data(), self.len())
     }
@@ -200,6 +207,7 @@ impl PyByteArray {
     /// afterwards, the behavior is undefined. The safety requirements of [`PyByteArray::as_bytes`]
     /// apply to this function as well.
     #[allow(clippy::mut_from_ref)]
+    #[cfg(not(GraalPy))]
     pub unsafe fn as_bytes_mut(&self) -> &mut [u8] {
         slice::from_raw_parts_mut(self.data(), self.len())
     }
@@ -223,7 +231,10 @@ impl PyByteArray {
     /// # });
     /// ```
     pub fn to_vec(&self) -> Vec<u8> {
-        unsafe { self.as_bytes() }.to_vec()
+        #[cfg(not(GraalPy))]
+        return unsafe { self.as_bytes() }.to_vec();
+        #[cfg(GraalPy)]
+        panic!("bytearray to_vec not available on GraalPy");
     }
 
     /// Resizes the bytearray object to the new length `len`.
@@ -289,6 +300,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(GraalPy))]
     fn test_to_vec() {
         Python::with_gil(|py| {
             let src = b"Hello Python";

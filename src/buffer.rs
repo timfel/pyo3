@@ -237,6 +237,7 @@ impl<T: Element> PyBuffer<T> {
     /// Gets a pointer to the specified item.
     ///
     /// If `indices.len() < self.dimensions()`, returns the start address of the sub-array at the specified dimension.
+    #[cfg(not(GraalPy))]
     pub fn get_ptr(&self, indices: &[usize]) -> *mut raw::c_void {
         let shape = &self.shape()[..indices.len()];
         for i in 0..indices.len() {
@@ -468,6 +469,7 @@ impl<T: Element> PyBuffer<T> {
     /// To check whether the buffer format is compatible before calling this method,
     /// you can use `<T as buffer::Element>::is_compatible_format(buf.format())`.
     /// Alternatively, `match buffer::ElementType::from_format(buf.format())`.
+    #[cfg(not(GraalPy))]
     pub fn copy_to_slice(&self, py: Python<'_>, target: &mut [T]) -> PyResult<()> {
         self.copy_to_slice_impl(py, target, b'C')
     }
@@ -481,10 +483,12 @@ impl<T: Element> PyBuffer<T> {
     /// To check whether the buffer format is compatible before calling this method,
     /// you can use `<T as buffer::Element>::is_compatible_format(buf.format())`.
     /// Alternatively, `match buffer::ElementType::from_format(buf.format())`.
+    #[cfg(not(GraalPy))]
     pub fn copy_to_fortran_slice(&self, py: Python<'_>, target: &mut [T]) -> PyResult<()> {
         self.copy_to_slice_impl(py, target, b'F')
     }
 
+    #[cfg(not(GraalPy))]
     fn copy_to_slice_impl(&self, py: Python<'_>, target: &mut [T], fort: u8) -> PyResult<()> {
         if mem::size_of_val(target) != self.len_bytes() {
             return Err(PyBufferError::new_err(format!(
@@ -515,6 +519,7 @@ impl<T: Element> PyBuffer<T> {
     /// If the buffer is multi-dimensional, the elements are written in C-style order.
     ///
     /// Fails if the buffer format is not compatible with type `T`.
+    #[cfg(not(GraalPy))]
     pub fn to_vec(&self, py: Python<'_>) -> PyResult<Vec<T>> {
         self.to_vec_impl(py, b'C')
     }
@@ -523,10 +528,12 @@ impl<T: Element> PyBuffer<T> {
     /// If the buffer is multi-dimensional, the elements are written in Fortran-style order.
     ///
     /// Fails if the buffer format is not compatible with type `T`.
+    #[cfg(not(GraalPy))]
     pub fn to_fortran_vec(&self, py: Python<'_>) -> PyResult<Vec<T>> {
         self.to_vec_impl(py, b'F')
     }
 
+    #[cfg(not(GraalPy))]
     fn to_vec_impl(&self, py: Python<'_>, fort: u8) -> PyResult<Vec<T>> {
         let item_count = self.item_count();
         let mut vec: Vec<T> = Vec::with_capacity(item_count);
@@ -563,6 +570,7 @@ impl<T: Element> PyBuffer<T> {
     /// To check whether the buffer format is compatible before calling this method,
     /// use `<T as buffer::Element>::is_compatible_format(buf.format())`.
     /// Alternatively, `match buffer::ElementType::from_format(buf.format())`.
+    #[cfg(not(GraalPy))]
     pub fn copy_from_slice(&self, py: Python<'_>, source: &[T]) -> PyResult<()> {
         self.copy_from_slice_impl(py, source, b'C')
     }
@@ -577,10 +585,12 @@ impl<T: Element> PyBuffer<T> {
     /// To check whether the buffer format is compatible before calling this method,
     /// use `<T as buffer::Element>::is_compatible_format(buf.format())`.
     /// Alternatively, `match buffer::ElementType::from_format(buf.format())`.
+    #[cfg(not(GraalPy))]
     pub fn copy_from_fortran_slice(&self, py: Python<'_>, source: &[T]) -> PyResult<()> {
         self.copy_from_slice_impl(py, source, b'F')
     }
 
+    #[cfg(not(GraalPy))]
     fn copy_from_slice_impl(&self, py: Python<'_>, source: &[T], fort: u8) -> PyResult<()> {
         if self.readonly() {
             return Err(PyBufferError::new_err("cannot write to read-only buffer"));
@@ -860,6 +870,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(GraalPy))]
     fn test_bytes_buffer() {
         Python::with_gil(|py| {
             let bytes = py.eval("b'abcde'", None, None).unwrap();
@@ -892,6 +903,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(GraalPy))]
     fn test_array_buffer() {
         Python::with_gil(|py| {
             let array = py

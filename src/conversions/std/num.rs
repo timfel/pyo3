@@ -163,7 +163,7 @@ int_convert_u64_or_i64!(
     ffi::PyLong_AsUnsignedLongLong
 );
 
-#[cfg(not(Py_LIMITED_API))]
+#[cfg(all(not(Py_LIMITED_API), not(GraalPy)))]
 mod fast_128bit_int_conversion {
     use super::*;
 
@@ -231,7 +231,7 @@ mod fast_128bit_int_conversion {
 }
 
 // For ABI3 we implement the conversion manually.
-#[cfg(Py_LIMITED_API)]
+#[cfg(any(Py_LIMITED_API, GraalPy))]
 mod slow_128bit_int_conversion {
     use super::*;
     const SHIFT: usize = 64;

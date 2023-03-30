@@ -43,6 +43,7 @@ macro_rules! impl_exception_boilerplate {
 
         impl ::std::error::Error for $name {
             fn source(&self) -> ::std::option::Option<&(dyn ::std::error::Error + 'static)> {
+                #[cfg(not(GraalPy))]
                 unsafe {
                     use $crate::AsPyPointer;
                     let cause: &$crate::exceptions::PyBaseException = self
@@ -51,6 +52,8 @@ macro_rules! impl_exception_boilerplate {
 
                     ::std::option::Option::Some(cause)
                 }
+                #[cfg(GraalPy)]
+                ::std::option::Option::None // TODO: Get the cause on GraalPy
             }
         }
     };
@@ -615,15 +618,32 @@ impl PyUnicodeDecodeError {
         range: ops::Range<usize>,
         reason: &CStr,
     ) -> PyResult<&'p PyUnicodeDecodeError> {
+        #[cfg(not(GraalPy))]
         unsafe {
-            py.from_owned_ptr_or_err(ffi::PyUnicodeDecodeError_Create(
+            return py.from_owned_ptr_or_err(ffi::PyUnicodeDecodeError_Create(
                 encoding.as_ptr(),
                 input.as_ptr() as *const c_char,
                 input.len() as ffi::Py_ssize_t,
                 range.start as ffi::Py_ssize_t,
                 range.end as ffi::Py_ssize_t,
                 reason.as_ptr(),
-            ))
+            ));
+        }
+        #[cfg(GraalPy)]
+        unsafe {
+            let py_locals = ffi::PyDict_New();
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("codec".as_ptr().cast::<c_char>()), ffi::PyUnicode_FromString(encoding.as_ptr().cast::<c_char>()));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("txt".as_ptr().cast::<c_char>()), ffi::PyUnicode_FromString(input.as_ptr().cast::<c_char>()));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("start".as_ptr().cast::<c_char>()), ffi::PyLong_FromUnsignedLong(range.start as u64));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("end".as_ptr().cast::<c_char>()), ffi::PyLong_FromUnsignedLong(range.end as u64));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("reason".as_ptr().cast::<c_char>()), ffi::PyUnicode_FromString(reason.as_ptr().cast::<c_char>()));
+            return py.from_owned_ptr_or_err(ffi::PyRun_StringFlags(
+                "UnicodeDecodeError(codec, txt, start, end, reason)".as_ptr().cast::<c_char>(),
+                ffi::Py_eval_input,
+                ffi::PyEval_GetBuiltins(),
+                py_locals,
+                std::ptr::null_mut()
+            ));
         }
     }
 
@@ -711,7 +731,7 @@ impl_native_exception!(
     native_doc!("ResourceWarning")
 );
 
-#[cfg(Py_3_10)]
+#[cfg(all(Py_3_10, not(GraalPy)))]
 impl_native_exception!(
     PyEncodingWarning,
     PyExc_EncodingWarning,
@@ -1104,6 +1124,6 @@ mod tests {
     test_exception!(PyImportWarning);
     test_exception!(PyUnicodeWarning);
     test_exception!(PyBytesWarning);
-    #[cfg(Py_3_10)]
+    #[cfg(all(Py_3_10, not(GraalPy)))]
     test_exception!(PyEncodingWarning);
 }

@@ -11,6 +11,8 @@ use crate::types::{PyAny, PyCFunction, PyDict, PyList, PyString};
 use crate::{AsPyPointer, IntoPy, Py, PyObject, Python};
 use std::ffi::{CStr, CString};
 use std::str;
+#[cfg(GraalPy)]
+use std::os::raw::c_char;
 
 /// Represents a Python [`module`][1] object.
 ///
@@ -140,6 +142,7 @@ impl PyModule {
         let filename = CString::new(file_name)?;
         let module = CString::new(module_name)?;
 
+        #[cfg(not(GraalPy))]
         unsafe {
             let cptr = ffi::Py_CompileString(data.as_ptr(), filename.as_ptr(), ffi::Py_file_input);
             if cptr.is_null() {
@@ -152,7 +155,22 @@ impl PyModule {
                 return Err(PyErr::fetch(py));
             }
 
-            <&PyModule as crate::FromPyObject>::extract(py.from_owned_ptr_or_err(mptr)?)
+            return <&PyModule as crate::FromPyObject>::extract(py.from_owned_ptr_or_err(mptr)?);
+        }
+
+        #[cfg(GraalPy)]
+        unsafe {
+            let py_locals = ffi::PyDict_New();
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("data".as_ptr().cast::<c_char>()), ffi::PyUnicode_FromString(data.as_ptr().cast::<c_char>()));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("filename".as_ptr().cast::<c_char>()), ffi::PyUnicode_FromString(filename.as_ptr().cast::<c_char>()));
+            ffi::PyDict_SetItem(py_locals, ffi::PyUnicode_FromString("module".as_ptr().cast::<c_char>()), ffi::PyUnicode_FromString(module.as_ptr().cast::<c_char>()));
+            return <&PyModule as crate::FromPyObject>::extract(py.from_owned_ptr_or_err(ffi::PyRun_StringFlags(
+                "exec(compile(data, filename, 'exec'), module.__dict__)".as_ptr().cast::<c_char>(),
+                ffi::Py_eval_input,
+                ffi::PyEval_GetBuiltins(),
+                py_locals,
+                std::ptr::null_mut()
+            ))?);
         }
     }
 
