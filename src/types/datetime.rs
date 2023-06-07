@@ -19,6 +19,8 @@ use crate::ffi::{
     PyDateTime_TIME_GET_FOLD, PyDateTime_TIME_GET_HOUR, PyDateTime_TIME_GET_MICROSECOND,
     PyDateTime_TIME_GET_MINUTE, PyDateTime_TIME_GET_SECOND,
 };
+#[cfg(GraalPy)]
+use crate::ffi::{PyDateTime_DATE_GET_TZINFO, PyDateTime_TIME_GET_TZINFO, Py_IsNone};
 use crate::instance::PyNativeType;
 use crate::types::PyTuple;
 use crate::{IntoPy, Py, PyAny, Python};
@@ -361,11 +363,22 @@ impl PyTimeAccess for PyDateTime {
 impl PyTzInfoAccess for PyDateTime {
     fn get_tzinfo(&self) -> Option<&PyTzInfo> {
         let ptr = self.as_ptr() as *mut ffi::PyDateTime_DateTime;
+        #[cfg(not(GraalPy))]
         unsafe {
             if (*ptr).hastzinfo != 0 {
                 Some(self.py().from_borrowed_ptr((*ptr).tzinfo))
             } else {
                 None
+            }
+        }
+
+        #[cfg(GraalPy)]
+        unsafe {
+            let res = PyDateTime_DATE_GET_TZINFO(ptr as *mut ffi::PyObject);
+            if Py_IsNone(res) == 1 {
+                None
+            } else {
+                Some(self.py().from_borrowed_ptr(res))
             }
         }
     }
@@ -457,11 +470,22 @@ impl PyTimeAccess for PyTime {
 impl PyTzInfoAccess for PyTime {
     fn get_tzinfo(&self) -> Option<&PyTzInfo> {
         let ptr = self.as_ptr() as *mut ffi::PyDateTime_Time;
+        #[cfg(not(GraalPy))]
         unsafe {
             if (*ptr).hastzinfo != 0 {
                 Some(self.py().from_borrowed_ptr((*ptr).tzinfo))
             } else {
                 None
+            }
+        }
+
+        #[cfg(GraalPy)]
+        unsafe {
+            let res = PyDateTime_TIME_GET_TZINFO(ptr as *mut ffi::PyObject);
+            if Py_IsNone(res) == 1 {
+                None
+            } else {
+                Some(self.py().from_borrowed_ptr(res))
             }
         }
     }
