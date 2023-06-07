@@ -32,9 +32,9 @@ fn new_from_iter(
         let mut counter: Py_ssize_t = 0;
 
         for obj in elements.take(len as usize) {
-            #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+            #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
             ffi::PyTuple_SET_ITEM(ptr, counter, obj.into_ptr());
-            #[cfg(any(Py_LIMITED_API, PyPy))]
+            #[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
             ffi::PyTuple_SetItem(ptr, counter, obj.into_ptr());
             counter += 1;
         }
@@ -163,7 +163,7 @@ impl PyTuple {
     /// # Safety
     ///
     /// Caller must verify that the index is within the bounds of the tuple.
-    #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+    #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
     pub unsafe fn get_item_unchecked(&self, index: usize) -> &PyAny {
         let item = ffi::PyTuple_GET_ITEM(self.as_ptr(), index as Py_ssize_t);
         self.py().from_borrowed_ptr(item)
@@ -233,9 +233,9 @@ pub struct PyTupleIterator<'a> {
 
 impl<'a> PyTupleIterator<'a> {
     unsafe fn get_item(&self, index: usize) -> &'a PyAny {
-        #[cfg(any(Py_LIMITED_API, PyPy))]
+        #[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
         let item = self.tuple.get_item(index).expect("tuple.get failed");
-        #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+        #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
         let item = self.tuple.get_item_unchecked(index);
         item
     }
@@ -335,10 +335,10 @@ fn type_output() -> TypeInfo {
         {
             let t: &PyTuple = obj.downcast()?;
             if t.len() == $length {
-                #[cfg(any(Py_LIMITED_API, PyPy))]
+                #[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
                 return Ok(($(t.get_item($n)?.extract::<$T>()?,)+));
 
-                #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+                #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
                 unsafe {return Ok(($(t.get_item_unchecked($n).extract::<$T>()?,)+));}
             } else {
                 Err(wrong_tuple_length(t, $length))
@@ -357,9 +357,9 @@ fn array_into_tuple<const N: usize>(py: Python<'_>, array: [PyObject; N]) -> Py<
         let ptr = ffi::PyTuple_New(N.try_into().expect("0 < N <= 12"));
         let tup = Py::from_owned_ptr(py, ptr);
         for (index, obj) in array.into_iter().enumerate() {
-            #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+            #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
             ffi::PyTuple_SET_ITEM(ptr, index as ffi::Py_ssize_t, obj.into_ptr());
-            #[cfg(any(Py_LIMITED_API, PyPy))]
+            #[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
             ffi::PyTuple_SetItem(ptr, index as ffi::Py_ssize_t, obj.into_ptr());
         }
         tup
@@ -677,7 +677,7 @@ mod tests {
         });
     }
 
-    #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+    #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
     #[test]
     fn test_tuple_get_item_unchecked_sanity() {
         Python::with_gil(|py| {
