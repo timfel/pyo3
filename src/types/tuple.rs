@@ -28,9 +28,9 @@ impl PyTuple {
         unsafe {
             let ptr = ffi::PyTuple_New(len as Py_ssize_t);
             for (i, e) in elements_iter.enumerate() {
-                #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+                #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
                 ffi::PyTuple_SET_ITEM(ptr, i as Py_ssize_t, e.to_object(py).into_ptr());
-                #[cfg(any(Py_LIMITED_API, PyPy))]
+                #[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
                 ffi::PyTuple_SetItem(ptr, i as Py_ssize_t, e.to_object(py).into_ptr());
             }
             py.from_owned_ptr(ptr)
@@ -45,9 +45,9 @@ impl PyTuple {
     /// Gets the length of the tuple.
     pub fn len(&self) -> usize {
         unsafe {
-            #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+            #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
             let size = ffi::PyTuple_GET_SIZE(self.as_ptr());
-            #[cfg(any(Py_LIMITED_API, PyPy))]
+            #[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
             let size = ffi::PyTuple_Size(self.as_ptr());
             // non-negative Py_ssize_t should always fit into Rust uint
             size as usize
@@ -133,7 +133,7 @@ impl PyTuple {
     /// # Safety
     ///
     /// Caller must verify that the index is within the bounds of the tuple.
-    #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+    #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
     pub unsafe fn get_item_unchecked(&self, index: usize) -> &PyAny {
         let item = ffi::PyTuple_GET_ITEM(self.as_ptr(), index as Py_ssize_t);
         self.py().from_borrowed_ptr(item)
@@ -198,9 +198,9 @@ impl<'a> Iterator for PyTupleIterator<'a> {
     #[inline]
     fn next(&mut self) -> Option<&'a PyAny> {
         if self.index < self.length {
-            #[cfg(any(Py_LIMITED_API, PyPy))]
+            #[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
             let item = self.tuple.get_item(self.index).expect("tuple.get failed");
-            #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+            #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
             let item = unsafe { self.tuple.get_item_unchecked(self.index) };
             self.index += 1;
             Some(item)
@@ -277,10 +277,10 @@ macro_rules! tuple_conversion ({$length:expr,$(($refN:ident, $n:tt, $T:ident)),+
         {
             let t = <PyTuple as PyTryFrom>::try_from(obj)?;
             if t.len() == $length {
-                #[cfg(any(Py_LIMITED_API, PyPy))]
+                #[cfg(any(Py_LIMITED_API, PyPy, GraalPy))]
                 return Ok(($(t.get_item($n)?.extract::<$T>()?,)+));
 
-                #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+                #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
                 unsafe {return Ok(($(t.get_item_unchecked($n).extract::<$T>()?,)+));}
             } else {
                 Err(wrong_tuple_length(t, $length))
@@ -573,7 +573,7 @@ mod tests {
         });
     }
 
-    #[cfg(not(any(Py_LIMITED_API, PyPy)))]
+    #[cfg(not(any(Py_LIMITED_API, PyPy, GraalPy)))]
     #[test]
     fn test_tuple_get_item_unchecked_sanity() {
         Python::with_gil(|py| {
