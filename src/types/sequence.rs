@@ -189,7 +189,7 @@ impl PySequence {
     /// Returns the number of occurrences of `value` in self, that is, return the
     /// number of keys for which `self[key] == value`.
     #[inline]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     pub fn count<V>(&self, value: V) -> PyResult<usize>
     where
         V: ToPyObject,
@@ -690,7 +690,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_seq_count() {
         Python::with_gil(|py| {
             let v: Vec<i32> = vec![1, 1, 2, 3, 5, 8];
