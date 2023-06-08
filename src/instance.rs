@@ -718,7 +718,7 @@ impl<T> Py<T> {
     pub fn call0(&self, py: Python<'_>) -> PyResult<PyObject> {
         cfg_if::cfg_if! {
             if #[cfg(all(
-                not(PyPy),
+                not(any(PyPy, GraalPy)),
                 any(Py_3_10, all(not(Py_LIMITED_API), Py_3_9)) // PyObject_CallNoArgs was added to python in 3.9 but to limited API in 3.10
             ))] {
                 // Optimized path on python 3.9+
@@ -787,7 +787,7 @@ impl<T> Py<T> {
         N: IntoPy<Py<PyString>>,
     {
         cfg_if::cfg_if! {
-            if #[cfg(all(Py_3_9, not(any(Py_LIMITED_API, PyPy))))] {
+            if #[cfg(all(Py_3_9, not(any(Py_LIMITED_API, PyPy, GraalPy))))] {
                 // Optimized path on python 3.9+
                 unsafe {
                     let name: Py<PyString> = name.into_py(py);

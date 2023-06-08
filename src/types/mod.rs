@@ -14,15 +14,15 @@ pub use self::datetime::{
     PyTzInfo, PyTzInfoAccess,
 };
 pub use self::dict::{IntoPyDict, PyDict};
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 pub use self::dict::{PyDictItems, PyDictKeys, PyDictValues};
 pub use self::ellipsis::PyEllipsis;
 pub use self::floatob::PyFloat;
-#[cfg(all(not(Py_LIMITED_API), not(PyPy)))]
+#[cfg(all(not(Py_LIMITED_API), not(PyPy), not(GraalPy)))]
 pub use self::frame::PyFrame;
 pub use self::frozenset::{PyFrozenSet, PyFrozenSetBuilder};
 pub use self::function::PyCFunction;
-#[cfg(all(not(Py_LIMITED_API), not(PyPy)))]
+#[cfg(all(not(Py_LIMITED_API), not(PyPy), not(GraalPy)))]
 pub use self::function::PyFunction;
 pub use self::iterator::PyIterator;
 pub use self::list::PyList;
@@ -32,7 +32,7 @@ pub use self::none::PyNone;
 pub use self::notimplemented::PyNotImplemented;
 pub use self::num::PyLong;
 pub use self::num::PyLong as PyInt;
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 pub use self::pysuper::PySuper;
 pub use self::sequence::PySequence;
 pub use self::set::PySet;
@@ -282,7 +282,7 @@ mod datetime;
 mod dict;
 mod ellipsis;
 mod floatob;
-#[cfg(all(not(Py_LIMITED_API), not(PyPy)))]
+#[cfg(all(not(Py_LIMITED_API), not(PyPy), not(GraalPy)))]
 mod frame;
 mod frozenset;
 mod function;
@@ -293,7 +293,7 @@ mod module;
 mod none;
 mod notimplemented;
 mod num;
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 mod pysuper;
 mod sequence;
 pub(crate) mod set;
