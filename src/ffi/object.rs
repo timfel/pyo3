@@ -66,7 +66,10 @@ pub unsafe fn Py_REFCNT(ob: *mut PyObject) -> Py_ssize_t {
     if ob.is_null() {
         panic!();
     }
-    (*ob).ob_refcnt
+    #[cfg(not(GraalPy))]
+    return (*ob).ob_refcnt;
+    #[cfg(GraalPy)]
+    return _Py_REFCNT(ob);
 }
 
 #[inline]
@@ -458,13 +461,20 @@ pub unsafe fn _Py_XNewRef(obj: *mut PyObject) -> *mut PyObject {
 
 #[cfg_attr(windows, link(name = "pythonXY"))]
 extern "C" {
+    #[cfg(not(GraalPy))]
     #[cfg_attr(PyPy, link_name = "_PyPy_NoneStruct")]
     static mut _Py_NoneStruct: PyObject;
+
+    #[cfg(GraalPy)]
+    static mut _Py_NoneStructReference: *mut PyObject;
 }
 
 #[inline]
 pub unsafe fn Py_None() -> *mut PyObject {
-    &mut _Py_NoneStruct
+    #[cfg(not(GraalPy))]
+    return &mut _Py_NoneStruct;
+    #[cfg(GraalPy)]
+    return _Py_NoneStructReference;
 }
 
 #[inline]
@@ -476,13 +486,20 @@ pub unsafe fn Py_IsNone(x: *mut PyObject) -> c_int {
 
 #[cfg_attr(windows, link(name = "pythonXY"))]
 extern "C" {
+    #[cfg(not(GraalPy))]
     #[cfg_attr(PyPy, link_name = "_PyPy_NotImplementedStruct")]
     static mut _Py_NotImplementedStruct: PyObject;
+
+    #[cfg(GraalPy)]
+    static mut _Py_NotImplementedStructReference: *mut PyObject;
 }
 
 #[inline]
 pub unsafe fn Py_NotImplemented() -> *mut PyObject {
-    &mut _Py_NotImplementedStruct
+    #[cfg(not(GraalPy))]
+    return &mut _Py_NotImplementedStruct;
+    #[cfg(GraalPy)]
+    return _Py_NotImplementedStructReference;
 }
 
 // skipped Py_RETURN_NOTIMPLEMENTED
