@@ -2,7 +2,7 @@ use super::PyMapping;
 use crate::err::{self, PyErr, PyResult};
 use crate::ffi::Py_ssize_t;
 use crate::types::{PyAny, PyList};
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 use crate::IntoPyPointer;
 use crate::{ffi, AsPyPointer, PyObject, Python, ToPyObject};
 
@@ -18,11 +18,11 @@ pyobject_native_type!(
 );
 
 /// Represents a Python `dict_keys`.
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 #[repr(transparent)]
 pub struct PyDictKeys(PyAny);
 
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 pyobject_native_type_core!(
     PyDictKeys,
     ffi::PyDictKeys_Type,
@@ -30,11 +30,11 @@ pyobject_native_type_core!(
 );
 
 /// Represents a Python `dict_values`.
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 #[repr(transparent)]
 pub struct PyDictValues(PyAny);
 
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 pyobject_native_type_core!(
     PyDictValues,
     ffi::PyDictValues_Type,
@@ -42,11 +42,11 @@ pyobject_native_type_core!(
 );
 
 /// Represents a Python `dict_items`.
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 #[repr(transparent)]
 pub struct PyDictItems(PyAny);
 
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 pyobject_native_type_core!(
     PyDictItems,
     ffi::PyDictItems_Type,
@@ -66,7 +66,7 @@ impl PyDict {
     ///
     /// Returns an error on invalid input. In the case of key collisions,
     /// this keeps the last entry seen.
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     pub fn from_sequence(py: Python<'_>, seq: PyObject) -> PyResult<&PyDict> {
         let dict = Self::new(py);
         err::error_on_minusone(py, unsafe {
@@ -98,12 +98,12 @@ impl PyDict {
     }
 
     fn _len(&self) -> Py_ssize_t {
-        #[cfg(any(not(Py_3_8), PyPy, Py_LIMITED_API))]
+        #[cfg(any(not(Py_3_8), PyPy, GraalPy, Py_LIMITED_API))]
         unsafe {
             ffi::PyDict_Size(self.as_ptr())
         }
 
-        #[cfg(all(Py_3_8, not(PyPy), not(Py_LIMITED_API)))]
+        #[cfg(all(Py_3_8, not(PyPy), not(GraalPy), not(Py_LIMITED_API)))]
         unsafe {
             (*self.as_ptr().cast::<ffi::PyDictObject>()).ma_used
         }
@@ -162,6 +162,7 @@ impl PyDict {
     /// returns `Ok(None)` if item is not present, or `Err(PyErr)` if an error occurs.
     ///
     /// To get a `KeyError` for non-existing keys, use `PyAny::get_item_with_error`.
+    #[cfg(not(GraalPy))]
     pub fn get_item_with_error<K>(&self, key: K) -> PyResult<Option<&PyAny>>
     where
         K: ToPyObject,
@@ -450,9 +451,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     use crate::exceptions;
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     use crate::types::PyList;
     use crate::{types::PyTuple, Python, ToPyObject};
     use std::collections::{BTreeMap, HashMap};
@@ -471,7 +472,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_from_sequence() {
         Python::with_gil(|py| {
             let items = PyList::new(py, &vec![("a", 1), ("b", 2)]);
@@ -486,7 +487,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_from_sequence_err() {
         Python::with_gil(|py| {
             let items = PyList::new(py, &vec!["a", "b"]);
@@ -544,7 +545,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_get_item_with_error() {
         Python::with_gil(|py| {
             let mut v = HashMap::new();
@@ -903,7 +904,7 @@ mod tests {
         });
     }
 
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn abc_dict(py: Python<'_>) -> &PyDict {
         let mut map = HashMap::<&'static str, i32>::new();
         map.insert("a", 1);
@@ -913,7 +914,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn dict_keys_view() {
         Python::with_gil(|py| {
             let dict = abc_dict(py);
@@ -923,7 +924,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn dict_values_view() {
         Python::with_gil(|py| {
             let dict = abc_dict(py);
@@ -933,7 +934,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn dict_items_view() {
         Python::with_gil(|py| {
             let dict = abc_dict(py);

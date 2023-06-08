@@ -3,7 +3,7 @@ use crate::conversion::{AsPyPointer, FromPyObject, IntoPy, IntoPyPointer, PyTryF
 use crate::err::{PyDowncastError, PyErr, PyResult};
 use crate::exceptions::{PyAttributeError, PyTypeError};
 use crate::type_object::PyTypeInfo;
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 use crate::types::PySuper;
 use crate::types::{PyDict, PyIterator, PyList, PyString, PyTuple, PyType};
 use crate::{err, ffi, Py, PyNativeType, PyObject, Python};
@@ -545,6 +545,7 @@ impl PyAny {
         cfg_if::cfg_if! {
             if #[cfg(all(
                 not(PyPy),
+                not(GraalPy),
                 any(Py_3_10, all(not(Py_LIMITED_API), Py_3_9)) // PyObject_CallNoArgs was added to python in 3.9 but to limited API in 3.10
             ))] {
                 // Optimized path on python 3.9+
@@ -678,7 +679,7 @@ impl PyAny {
         N: IntoPy<Py<PyString>>,
     {
         cfg_if::cfg_if! {
-            if #[cfg(all(Py_3_9, not(any(Py_LIMITED_API, PyPy))))] {
+            if #[cfg(all(Py_3_9, not(any(Py_LIMITED_API, PyPy, GraalPy))))] {
                 let py = self.py();
 
                 // Optimized path on python 3.9+
@@ -1077,7 +1078,7 @@ impl PyAny {
     /// Return a proxy object that delegates method calls to a parent or sibling class of type.
     ///
     /// This is equivalent to the Python expression `super()`
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     pub fn py_super(&self) -> PyResult<&PySuper> {
         PySuper::new(self.get_type(), self)
     }
