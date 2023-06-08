@@ -301,7 +301,7 @@ pub use crate::conversion::{
     ToPyObject,
 };
 pub use crate::err::{PyDowncastError, PyErr, PyErrArguments, PyResult};
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 pub use crate::gil::{prepare_freethreaded_python, with_embedded_python_interpreter};
 pub use crate::gil::{GILGuard, GILPool};
 pub use crate::instance::{Py, PyNativeType, PyObject};
