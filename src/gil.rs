@@ -68,7 +68,7 @@ pub(crate) fn gil_is_acquired() -> bool {
 /// Python::with_gil(|py| py.run("print('Hello World')", None, None))
 /// # }
 /// ```
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 #[allow(clippy::collapsible_if)] // for if cfg!
 pub fn prepare_freethreaded_python() {
     // Protect against race conditions when Python is not yet initialized and multiple threads
@@ -133,7 +133,7 @@ pub fn prepare_freethreaded_python() {
 /// }
 /// # }
 /// ```
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 #[allow(clippy::collapsible_if)] // for if cfg!
 pub unsafe fn with_embedded_python_interpreter<F, R>(f: F) -> R
 where
@@ -215,7 +215,7 @@ impl GILGuard {
         //    auto-initialize so this avoids breaking existing builds.
         //  - Otherwise, just check the GIL is initialized.
         cfg_if::cfg_if! {
-            if #[cfg(all(feature = "auto-initialize", not(PyPy)))] {
+            if #[cfg(all(feature = "auto-initialize", not(any(PyPy, GraalPy))))] {
                 prepare_freethreaded_python();
             } else {
                 START.call_once_force(|_| unsafe {

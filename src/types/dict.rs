@@ -2,7 +2,7 @@
 
 use crate::err::{self, PyErr, PyResult};
 use crate::types::{PyAny, PyList};
-#[cfg(not(PyPy))]
+#[cfg(not(any(PyPy, GraalPy)))]
 use crate::IntoPyPointer;
 use crate::{
     ffi, AsPyPointer, FromPyObject, IntoPy, PyObject, PyTryFrom, Python, ToBorrowedObject,
@@ -38,7 +38,7 @@ impl PyDict {
     ///
     /// Returns an error on invalid input. In the case of key collisions,
     /// this keeps the last entry seen.
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     pub fn from_sequence(py: Python, seq: PyObject) -> PyResult<&PyDict> {
         unsafe {
             let dict = py.from_owned_ptr::<PyDict>(ffi::PyDict_New());
@@ -374,7 +374,7 @@ where
 mod tests {
     use crate::conversion::IntoPy;
     use crate::types::dict::IntoPyDict;
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     use crate::types::PyList;
     use crate::types::{PyDict, PyTuple};
     use crate::PyObject;
@@ -396,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_from_sequence() {
         Python::with_gil(|py| {
             let items = PyList::new(py, &vec![("a", 1), ("b", 2)]);
@@ -411,7 +411,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(PyPy))]
+    #[cfg(not(any(PyPy, GraalPy)))]
     fn test_from_sequence_err() {
         Python::with_gil(|py| {
             let items = PyList::new(py, &vec!["a", "b"]);
