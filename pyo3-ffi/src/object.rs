@@ -71,12 +71,18 @@ pub unsafe fn Py_REFCNT(ob: *mut PyObject) -> Py_ssize_t {
 
 #[inline]
 pub unsafe fn Py_TYPE(ob: *mut PyObject) -> *mut PyTypeObject {
-    (*ob).ob_type
+    #[cfg(not(GraalPy))]
+    return (*ob).ob_type;
+    #[cfg(GraalPy)]
+    return _Py_TYPE(ob);
 }
 
 #[inline]
 pub unsafe fn Py_SIZE(ob: *mut PyObject) -> Py_ssize_t {
-    (*(ob as *mut PyVarObject)).ob_size
+    #[cfg(not(GraalPy))]
+    return (*(ob as *mut PyVarObject)).ob_size;
+    #[cfg(GraalPy)]
+    return _Py_SIZE(ob as *mut PyVarObject);
 }
 
 #[inline]
@@ -407,6 +413,20 @@ pub const Py_TPFLAGS_HAVE_FINALIZE: c_ulong = 1;
 extern "C" {
     #[cfg_attr(PyPy, link_name = "_PyPy_Dealloc")]
     pub fn _Py_Dealloc(arg1: *mut PyObject);
+
+    #[cfg(Py_3_10)]
+    pub fn _Py_IncRef(o: *mut PyObject);
+    #[cfg(Py_3_10)]
+    pub fn _Py_DecRef(o: *mut PyObject);
+
+    #[cfg(GraalPy)]
+    pub fn _Py_REFCNT(arg1: *const PyObject) -> Py_ssize_t;
+
+    #[cfg(GraalPy)]
+    pub fn _Py_TYPE(arg1: *const PyObject) -> *mut PyTypeObject;
+
+    #[cfg(GraalPy)]
+    pub fn _Py_SIZE(arg1: *const PyVarObject) -> Py_ssize_t;
 }
 
 // Reference counting macros.
@@ -415,7 +435,12 @@ pub unsafe fn Py_INCREF(op: *mut PyObject) {
     if cfg!(py_sys_config = "Py_REF_DEBUG") {
         Py_IncRef(op)
     } else {
-        (*op).ob_refcnt += 1
+        #[cfg(not(GraalPy))]
+        {
+            (*op).ob_refcnt += 1;
+        }
+        #[cfg(GraalPy)]
+        _Py_IncRef(op);
     }
 }
 
@@ -424,10 +449,15 @@ pub unsafe fn Py_DECREF(op: *mut PyObject) {
     if cfg!(py_sys_config = "Py_REF_DEBUG") {
         Py_DecRef(op)
     } else {
-        (*op).ob_refcnt -= 1;
-        if (*op).ob_refcnt == 0 {
-            _Py_Dealloc(op)
+        #[cfg(not(GraalPy))]
+        {
+            (*op).ob_refcnt -= 1;
+            if (*op).ob_refcnt == 0 {
+                _Py_Dealloc(op)
+            }
         }
+        #[cfg(GraalPy)]
+        _Py_DecRef(op)
     }
 }
 
@@ -456,8 +486,10 @@ pub unsafe fn Py_XDECREF(op: *mut PyObject) {
 
 extern "C" {
     #[cfg_attr(PyPy, link_name = "PyPy_IncRef")]
+    #[cfg_attr(GraalPy, link_name = "_Py_IncRef")]
     pub fn Py_IncRef(o: *mut PyObject);
     #[cfg_attr(PyPy, link_name = "PyPy_DecRef")]
+    #[cfg_attr(GraalPy, link_name = "_Py_DecRef")]
     pub fn Py_DecRef(o: *mut PyObject);
 
     #[cfg(Py_3_10)]
