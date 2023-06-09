@@ -24,10 +24,11 @@ pub unsafe fn module_init(
 #[inline]
 pub unsafe fn noargs(
     slf: *mut ffi::PyObject,
-    args: *mut ffi::PyObject,
+    _args: *mut ffi::PyObject,
     f: for<'py> unsafe fn(Python<'py>, *mut ffi::PyObject) -> PyResult<*mut ffi::PyObject>,
 ) -> *mut ffi::PyObject {
-    debug_assert!(args.is_null());
+    #[cfg(not(GraalPy))] // this is not specified and GraalPy does not pass null here
+    debug_assert!(_args.is_null());
     trampoline_inner(|py| f(py, slf))
 }
 
