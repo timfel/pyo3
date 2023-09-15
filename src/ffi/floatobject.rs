@@ -9,6 +9,7 @@ opaque_struct!(PyFloatObject);
 #[repr(C)]
 pub struct PyFloatObject {
     pub ob_base: PyObject,
+    #[cfg(not(GraalPy))]
     pub ob_fval: c_double,
 }
 
@@ -46,7 +47,10 @@ extern "C" {
 #[cfg(not(Py_LIMITED_API))]
 #[inline]
 pub unsafe fn PyFloat_AS_DOUBLE(op: *mut PyObject) -> c_double {
-    (*(op as *mut PyFloatObject)).ob_fval
+    #[cfg(not(GraalPy))]
+    return (*(op as *mut PyFloatObject)).ob_fval;
+    #[cfg(GraalPy)]
+    return PyFloat_AsDouble(op);
 }
 
 // skipped non-limited _PyFloat_Pack2
