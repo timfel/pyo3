@@ -10,6 +10,10 @@ fn test_compile_errors() {
     t.compile_fail("tests/ui/invalid_pyclass_args.rs");
     t.compile_fail("tests/ui/invalid_pyclass_enum.rs");
     t.compile_fail("tests/ui/invalid_pyclass_item.rs");
+    #[cfg(Py_3_9)]
+    t.compile_fail("tests/ui/invalid_pyclass_generic.rs");
+    #[cfg(Py_3_9)]
+    t.compile_fail("tests/ui/pyclass_generic_enum.rs");
     t.compile_fail("tests/ui/invalid_pyfunction_signatures.rs");
     t.compile_fail("tests/ui/invalid_pyfunction_definition.rs");
     #[cfg(any(not(Py_LIMITED_API), Py_3_11))]
@@ -33,7 +37,6 @@ fn test_compile_errors() {
     t.compile_fail("tests/ui/wrong_aspyref_lifetimes.rs");
     #[cfg(not(any(feature = "uuid")))]
     t.compile_fail("tests/ui/invalid_pyfunctions.rs");
-    #[cfg(not(any(feature = "hashbrown", feature = "indexmap")))]
     t.compile_fail("tests/ui/invalid_pymethods.rs");
     // output changes with async feature
     #[cfg(all(Py_LIMITED_API, feature = "experimental-async"))]
@@ -71,7 +74,8 @@ fn test_compile_errors() {
     t.compile_fail("tests/ui/duplicate_pymodule_submodule.rs");
     #[cfg(all(not(Py_LIMITED_API), Py_3_11))]
     t.compile_fail("tests/ui/invalid_base_class.rs");
+    #[cfg(any(not(Py_3_10), all(not(Py_3_14), Py_LIMITED_API)))]
+    t.compile_fail("tests/ui/immutable_type.rs");
     t.pass("tests/ui/ambiguous_associated_items.rs");
     t.pass("tests/ui/pyclass_probe.rs");
-    t.compile_fail("tests/ui/deprecated.rs");
 }

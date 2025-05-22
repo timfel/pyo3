@@ -8,15 +8,18 @@
 //! The JSON blobs format must be synchronized with the `pyo3_introspection::introspection.rs::Chunk`
 //! type that is used to parse them.
 
+use crate::method::{FnArg, RegularArg};
+use crate::pyfunction::FunctionSignature;
 use crate::utils::PyO3CratePath;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens};
+use std::borrow::Cow;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::mem::take;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use syn::{Attribute, Ident};
+use syn::{Attribute, Ident, Type, TypePath};
 
 static GLOBAL_COUNTER_FOR_UNIQUE_NAMES: AtomicUsize = AtomicUsize::new(0);
 
@@ -26,11 +29,11 @@ pub fn module_introspection_code<'a>(
     members: impl IntoIterator<Item = &'a Ident>,
     members_cfg_attrs: impl IntoIterator<Item = &'a Vec<Attribute>>,
 ) -> TokenStream {
-    let stub = IntrospectionNode::Map(
+    IntrospectionNode::Map(
         [
-            ("type", IntrospectionNode::String("module")),
+            ("type", IntrospectionNode::String("module".into())),
             ("id", IntrospectionNode::IntrospectionId(None)),
-            ("name", IntrospectionNode::String(name)),
+            ("name", IntrospectionNode::String(name.into())),
             (
                 "members",
                 IntrospectionNode::List(
@@ -39,7 +42,9 @@ pub fn module_introspection_code<'a>(
                         .zip(members_cfg_attrs)
                         .filter_map(|(member, attributes)| {
                             if attributes.is_empty() {
-                                Some(IntrospectionNode::IntrospectionId(Some(member)))
+                                Some(IntrospectionNode::IntrospectionId(Some(ident_to_type(
+                                    member,
+                                ))))
                             } else {
                                 None // TODO: properly interpret cfg attributes
                             }
@@ -50,12 +55,7 @@ pub fn module_introspection_code<'a>(
         ]
         .into(),
     )
-    .emit(pyo3_crate_path);
-    let introspection_id = introspection_id_const();
-    quote! {
-        #stub
-        #introspection_id
-    }
+    .emit(pyo3_crate_path)
 }
 
 pub fn class_introspection_code(
@@ -63,44 +63,163 @@ pub fn class_introspection_code(
     ident: &Ident,
     name: &str,
 ) -> TokenStream {
-    let stub = IntrospectionNode::Map(
+    IntrospectionNode::Map(
         [
-            ("type", IntrospectionNode::String("class")),
-            ("id", IntrospectionNode::IntrospectionId(Some(ident))),
-            ("name", IntrospectionNode::String(name)),
+            ("type", IntrospectionNode::String("class".into())),
+            (
+                "id",
+                IntrospectionNode::IntrospectionId(Some(ident_to_type(ident))),
+            ),
+            ("name", IntrospectionNode::String(name.into())),
         ]
         .into(),
     )
-    .emit(pyo3_crate_path);
-    let introspection_id = introspection_id_const();
-    quote! {
-        #stub
-        impl #ident {
-            #introspection_id
-        }
-    }
+    .emit(pyo3_crate_path)
 }
 
-pub fn function_introspection_code(pyo3_crate_path: &PyO3CratePath, name: &str) -> TokenStream {
-    let stub = IntrospectionNode::Map(
-        [
-            ("type", IntrospectionNode::String("function")),
-            ("id", IntrospectionNode::IntrospectionId(None)),
-            ("name", IntrospectionNode::String(name)),
-        ]
-        .into(),
-    )
-    .emit(pyo3_crate_path);
-    let introspection_id = introspection_id_const();
-    quote! {
-        #stub
-        #introspection_id
+pub fn function_introspection_code(
+    pyo3_crate_path: &PyO3CratePath,
+    ident: Option<&Ident>,
+    name: &str,
+    signature: &FunctionSignature<'_>,
+    first_argument: Option<&'static str>,
+    decorators: impl IntoIterator<Item = String>,
+    parent: Option<&Type>,
+) -> TokenStream {
+    let mut desc = HashMap::from([
+        ("type", IntrospectionNode::String("function".into())),
+        ("name", IntrospectionNode::String(name.into())),
+        (
+            "arguments",
+            arguments_introspection_data(signature, first_argument),
+        ),
+    ]);
+    if let Some(ident) = ident {
+        desc.insert(
+            "id",
+            IntrospectionNode::IntrospectionId(Some(ident_to_type(ident))),
+        );
     }
+    let decorators = decorators
+        .into_iter()
+        .map(|d| IntrospectionNode::String(d.into()))
+        .collect::<Vec<_>>();
+    if !decorators.is_empty() {
+        desc.insert("decorators", IntrospectionNode::List(decorators));
+    }
+    if let Some(parent) = parent {
+        desc.insert(
+            "parent",
+            IntrospectionNode::IntrospectionId(Some(Cow::Borrowed(parent))),
+        );
+    }
+    IntrospectionNode::Map(desc).emit(pyo3_crate_path)
+}
+
+fn arguments_introspection_data<'a>(
+    signature: &'a FunctionSignature<'a>,
+    first_argument: Option<&'a str>,
+) -> IntrospectionNode<'a> {
+    let mut argument_desc = signature.arguments.iter().filter_map(|arg| {
+        if let FnArg::Regular(arg) = arg {
+            Some(arg)
+        } else {
+            None
+        }
+    });
+
+    let mut posonlyargs = Vec::new();
+    let mut args = Vec::new();
+    let mut vararg = None;
+    let mut kwonlyargs = Vec::new();
+    let mut kwarg = None;
+
+    if let Some(first_argument) = first_argument {
+        posonlyargs.push(IntrospectionNode::Map(
+            [("name", IntrospectionNode::String(first_argument.into()))].into(),
+        ));
+    }
+
+    for (i, param) in signature
+        .python_signature
+        .positional_parameters
+        .iter()
+        .enumerate()
+    {
+        let arg_desc = if let Some(arg_desc) = argument_desc.next() {
+            arg_desc
+        } else {
+            panic!("Less arguments than in python signature");
+        };
+        let arg = argument_introspection_data(param, arg_desc);
+        if i < signature.python_signature.positional_only_parameters {
+            posonlyargs.push(arg);
+        } else {
+            args.push(arg)
+        }
+    }
+
+    if let Some(param) = &signature.python_signature.varargs {
+        vararg = Some(IntrospectionNode::Map(
+            [("name", IntrospectionNode::String(param.into()))].into(),
+        ));
+    }
+
+    for (param, _) in &signature.python_signature.keyword_only_parameters {
+        let arg_desc = if let Some(arg_desc) = argument_desc.next() {
+            arg_desc
+        } else {
+            panic!("Less arguments than in python signature");
+        };
+        kwonlyargs.push(argument_introspection_data(param, arg_desc));
+    }
+
+    if let Some(param) = &signature.python_signature.kwargs {
+        kwarg = Some(IntrospectionNode::Map(
+            [
+                ("name", IntrospectionNode::String(param.into())),
+                ("kind", IntrospectionNode::String("VAR_KEYWORD".into())),
+            ]
+            .into(),
+        ));
+    }
+
+    let mut map = HashMap::new();
+    if !posonlyargs.is_empty() {
+        map.insert("posonlyargs", IntrospectionNode::List(posonlyargs));
+    }
+    if !args.is_empty() {
+        map.insert("args", IntrospectionNode::List(args));
+    }
+    if let Some(vararg) = vararg {
+        map.insert("vararg", vararg);
+    }
+    if !kwonlyargs.is_empty() {
+        map.insert("kwonlyargs", IntrospectionNode::List(kwonlyargs));
+    }
+    if let Some(kwarg) = kwarg {
+        map.insert("kwarg", kwarg);
+    }
+    IntrospectionNode::Map(map)
+}
+
+fn argument_introspection_data<'a>(
+    name: &'a str,
+    desc: &'a RegularArg<'_>,
+) -> IntrospectionNode<'a> {
+    let mut params: HashMap<_, _> = [("name", IntrospectionNode::String(name.into()))].into();
+    if desc.default_value.is_some() {
+        params.insert(
+            "default",
+            IntrospectionNode::String(desc.default_value().into()),
+        );
+    }
+    IntrospectionNode::Map(params)
 }
 
 enum IntrospectionNode<'a> {
-    String(&'a str),
-    IntrospectionId(Option<&'a Ident>),
+    String(Cow<'a, str>),
+    IntrospectionId(Option<Cow<'a, Type>>),
     Map(HashMap<&'static str, IntrospectionNode<'a>>),
     List(Vec<IntrospectionNode<'a>>),
 }
@@ -125,7 +244,7 @@ impl IntrospectionNode<'_> {
     fn add_to_serialization(self, content: &mut ConcatenationBuilder) {
         match self {
             Self::String(string) => {
-                content.push_str_to_escape(string);
+                content.push_str_to_escape(&string);
             }
             Self::IntrospectionId(ident) => {
                 content.push_str("\"");
@@ -232,7 +351,8 @@ impl ToTokens for ConcatenationBuilderElement {
     }
 }
 
-fn introspection_id_const() -> TokenStream {
+/// Generates a new unique identifier for linking introspection objects together
+pub fn introspection_id_const() -> TokenStream {
     let id = unique_element_id().to_string();
     quote! {
         #[doc(hidden)]
@@ -247,4 +367,14 @@ fn unique_element_id() -> u64 {
         .fetch_add(1, Ordering::Relaxed)
         .hash(&mut hasher); // If there are multiple elements in the same call site
     hasher.finish()
+}
+
+fn ident_to_type(ident: &Ident) -> Cow<'static, Type> {
+    Cow::Owned(
+        TypePath {
+            path: ident.clone().into(),
+            qself: None,
+        }
+        .into(),
+    )
 }

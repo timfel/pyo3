@@ -4,8 +4,8 @@ use std::ffi::CString;
 use crate::attributes::{FromPyWithAttribute, NameAttribute, RenamingRule};
 use crate::method::{CallingConvention, ExtractErrorMode, PyArg};
 use crate::params::{impl_regular_arg_param, Holders};
-use crate::utils::{deprecated_from_py_with, PythonDoc, TypeExt as _};
 use crate::utils::{Ctx, LitCStr};
+use crate::utils::{PythonDoc, TypeExt as _};
 use crate::{
     method::{FnArg, FnSpec, FnType, SelfType},
     pyfunction::PyFunctionOptions,
@@ -40,7 +40,7 @@ pub enum GeneratedPyMethod {
 pub struct PyMethod<'a> {
     kind: PyMethodKind,
     method_name: String,
-    spec: FnSpec<'a>,
+    pub spec: FnSpec<'a>,
 }
 
 enum PyMethodKind {
@@ -160,11 +160,13 @@ enum PyMethodProtoKind {
 }
 
 impl<'a> PyMethod<'a> {
-    fn parse(
+    pub fn parse(
         sig: &'a mut syn::Signature,
         meth_attrs: &mut Vec<syn::Attribute>,
         options: PyFunctionOptions,
     ) -> Result<Self> {
+        check_generic(sig)?;
+        ensure_function_options_valid(&options)?;
         let spec = FnSpec::parse(sig, meth_attrs, options)?;
 
         let method_name = spec.python_name.to_string();
@@ -187,14 +189,10 @@ pub fn is_proto_method(name: &str) -> bool {
 
 pub fn gen_py_method(
     cls: &syn::Type,
-    sig: &mut syn::Signature,
-    meth_attrs: &mut Vec<syn::Attribute>,
-    options: PyFunctionOptions,
+    method: PyMethod<'_>,
+    meth_attrs: &[syn::Attribute],
     ctx: &Ctx,
 ) -> Result<GeneratedPyMethod> {
-    check_generic(sig)?;
-    ensure_function_options_valid(&options)?;
-    let method = PyMethod::parse(sig, meth_attrs, options)?;
     let spec = &method.spec;
     let Ctx { pyo3_path, .. } = ctx;
 
@@ -278,7 +276,7 @@ pub fn gen_py_method(
 }
 
 pub fn check_generic(sig: &syn::Signature) -> syn::Result<()> {
-    let err_msg = |typ| format!("Python functions cannot have generic {} parameters", typ);
+    let err_msg = |typ| format!("Python functions cannot have generic {typ} parameters");
     for param in &sig.generics.params {
         match param {
             syn::GenericParam::Lifetime(_) => {}
@@ -659,10 +657,8 @@ pub fn impl_py_setter_def(
             let (from_py_with, ident) =
                 if let Some(from_py_with) = &value_arg.from_py_with().as_ref().map(|f| &f.value) {
                     let ident = syn::Ident::new("from_py_with", from_py_with.span());
-                    let d = deprecated_from_py_with(from_py_with).unwrap_or_default();
                     (
                         quote_spanned! { from_py_with.span() =>
-                            #d
                             let #ident = #from_py_with;
                         },
                         ident,
@@ -1603,7 +1599,7 @@ fn extract_proto_arguments(
         if let FnArg::Py(..) = arg {
             args.push(quote! { py });
         } else {
-            let ident = syn::Ident::new(&format!("arg{}", non_python_args), Span::call_site());
+            let ident = syn::Ident::new(&format!("arg{non_python_args}"), Span::call_site());
             let conversions = proto_args.get(non_python_args)
                 .ok_or_else(|| err_spanned!(arg.ty().span() => format!("Expected at most {} non-python arguments", proto_args.len())))?
                 .extract(&ident, arg, extract_error_mode, holders, ctx);

@@ -121,6 +121,10 @@ These features enable conversions between Python types and types from other Rust
 
 Adds a dependency on [anyhow](https://docs.rs/anyhow). Enables a conversion from [anyhow](https://docs.rs/anyhow)’s [`Error`](https://docs.rs/anyhow/latest/anyhow/struct.Error.html) type to [`PyErr`]({{#PYO3_DOCS_URL}}/pyo3/struct.PyErr.html), for easy error handling.
 
+### `arc_lock`
+
+Enables Pyo3's `MutexExt` trait for all Mutexes that extend on [`lock_api::Mutex`](https://docs.rs/lock_api/latest/lock_api/struct.Mutex.html) and are wrapped in an [`Arc`](https://doc.rust-lang.org/std/sync/struct.Arc.html) type. Like [`Arc<parking_lot::Mutex>`](https://docs.rs/parking_lot/latest/parking_lot/type.Mutex.html#method.lock_arc)
+
 ### `bigdecimal`
 Adds a dependency on [bigdecimal](https://docs.rs/bigdecimal) and enables conversions into its [`BigDecimal`](https://docs.rs/bigdecimal/latest/bigdecimal/struct.BigDecimal.html) type.
 
@@ -168,6 +172,10 @@ Adds a dependency on [jiff@0.2](https://docs.rs/jiff/0.2) and requires MSRV 1.70
 - [Zoned](https://docs.rs/jiff/0.2/jiff/struct.Zoned.html) -> [`PyDateTime`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyDateTime.html)
 - [Timestamp](https://docs.rs/jiff/0.2/jiff/struct.Timestamp.html) -> [`PyDateTime`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyDateTime.html)
 
+### `lock_api`
+
+Adds a dependency on [lock_api](https://docs.rs/lock_api) and enables Pyo3's `MutexExt` trait for all mutexes that extend on [`lock_api::Mutex`](https://docs.rs/lock_api/latest/lock_api/struct.Mutex.html) (like `parking_lot` or `spin`).
+
 ### `num-bigint`
 
 Adds a dependency on [num-bigint](https://docs.rs/num-bigint) and enables conversions into its [`BigInt`](https://docs.rs/num-bigint/latest/num_bigint/struct.BigInt.html) and [`BigUint`](https://docs.rs/num-bigint/latest/num_bigint/struct.BigUint.html) types.
@@ -180,9 +188,30 @@ Adds a dependency on [num-complex](https://docs.rs/num-complex) and enables conv
 
 Adds a dependency on [num-rational](https://docs.rs/num-rational) and enables conversions into its [`Ratio`](https://docs.rs/num-rational/latest/num_rational/struct.Ratio.html) type.
 
+### `ordered-float`
+
+Adds a dependency on [ordered-float](https://docs.rs/ordered-float) and enables conversions between [ordered-float](https://docs.rs/ordered-float)'s types and Python:
+- [NotNan](https://docs.rs/ordered-float/latest/ordered_float/struct.NotNan.html) -> [`PyFloat`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyFloat.html)
+- [OrderedFloat](https://docs.rs/ordered-float/latest/ordered_float/struct.OrderedFloat.html) -> [`PyFloat`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyFloat.html)
+
+### `parking-lot`
+
+Adds a dependency on [parking_lot](https://docs.rs/parking_lot) and enables Pyo3's `OnceExt` & `MutexExt` traits for [`parking_lot::Once`](https://docs.rs/parking_lot/latest/parking_lot/struct.Once.html) and [`parking_lot::Mutex`](https://docs.rs/parking_lot/latest/parking_lot/type.Mutex.html) types.
+
 ### `rust_decimal`
 
 Adds a dependency on [rust_decimal](https://docs.rs/rust_decimal) and enables conversions into its [`Decimal`](https://docs.rs/rust_decimal/latest/rust_decimal/struct.Decimal.html) type.
+
+### `time`
+
+Adds a dependency on [time](https://docs.rs/time) and requires MSRV 1.67.1. Enables conversions between [time](https://docs.rs/time)'s types and Python:
+- [Date](https://docs.rs/time/0.3.38/time/struct.Date.html) -> [`PyDate`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyDate.html)
+- [Time](https://docs.rs/time/0.3.38/time/struct.Time.html) -> [`PyTime`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyTime.html)
+- [OffsetDateTime](https://docs.rs/time/0.3.38/time/struct.OffsetDateTime.html) -> [`PyDateTime`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyDateTime.html)
+- [PrimitiveDateTime](https://docs.rs/time/0.3.38/time/struct.PrimitiveDateTime.html) -> [`PyDateTime`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyDateTime.html)
+- [Duration](https://docs.rs/time/0.3.38/time/struct.Duration.html) -> [`PyDelta`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyDelta.html)
+- [UtcOffset](https://docs.rs/time/0.3.38/time/struct.UtcOffset.html) -> [`PyTzInfo`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyTzInfo.html)
+- [UtcDateTime](https://docs.rs/time/0.3.38/time/struct.UtcDateTime.html) -> [`PyDateTime`]({{#PYO3_DOCS_URL}}/pyo3/types/struct.PyDateTime.html)
 
 ### `serde`
 

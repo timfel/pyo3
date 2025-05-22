@@ -1,4 +1,4 @@
-use crate::model::{Class, Function, Module};
+use crate::model::{Argument, Class, Function, Module, VariableLengthArgument};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -39,14 +39,153 @@ fn module_stubs(module: &Module) -> String {
     for function in &module.functions {
         elements.push(function_stubs(function));
     }
-    elements.push(String::new()); // last line jump
-    elements.join("\n")
+
+    // We insert two line jumps (i.e. empty strings) only above and below multiple line elements (classes with methods, functions with decorators)
+    let mut output = String::new();
+    for element in elements {
+        let is_multiline = element.contains('\n');
+        if is_multiline && !output.is_empty() && !output.ends_with("\n\n") {
+            output.push('\n');
+        }
+        output.push_str(&element);
+        output.push('\n');
+        if is_multiline {
+            output.push('\n');
+        }
+    }
+    // We remove a line jump at the end if they are two
+    if output.ends_with("\n\n") {
+        output.pop();
+    }
+    output
 }
 
 fn class_stubs(class: &Class) -> String {
-    format!("class {}: ...", class.name)
+    let mut buffer = format!("class {}:", class.name);
+    if class.methods.is_empty() {
+        buffer.push_str(" ...");
+        return buffer;
+    }
+    for method in &class.methods {
+        // We do the indentation
+        buffer.push_str("\n    ");
+        buffer.push_str(&function_stubs(method).replace('\n', "\n    "));
+    }
+    buffer
 }
 
 fn function_stubs(function: &Function) -> String {
-    format!("def {}(*args, **kwargs): ...", function.name)
+    // Signature
+    let mut parameters = Vec::new();
+    for argument in &function.arguments.positional_only_arguments {
+        parameters.push(argument_stub(argument));
+    }
+    if !function.arguments.positional_only_arguments.is_empty() {
+        parameters.push("/".into());
+    }
+    for argument in &function.arguments.arguments {
+        parameters.push(argument_stub(argument));
+    }
+    if let Some(argument) = &function.arguments.vararg {
+        parameters.push(format!("*{}", variable_length_argument_stub(argument)));
+    } else if !function.arguments.keyword_only_arguments.is_empty() {
+        parameters.push("*".into());
+    }
+    for argument in &function.arguments.keyword_only_arguments {
+        parameters.push(argument_stub(argument));
+    }
+    if let Some(argument) = &function.arguments.kwarg {
+        parameters.push(format!("**{}", variable_length_argument_stub(argument)));
+    }
+    let output = format!("def {}({}): ...", function.name, parameters.join(", "));
+    if function.decorators.is_empty() {
+        return output;
+    }
+    let mut buffer = String::new();
+    for decorator in &function.decorators {
+        buffer.push('@');
+        buffer.push_str(decorator);
+        buffer.push('\n');
+    }
+    buffer.push_str(&output);
+    buffer
+}
+
+fn argument_stub(argument: &Argument) -> String {
+    let mut output = argument.name.clone();
+    if let Some(default_value) = &argument.default_value {
+        output.push('=');
+        output.push_str(default_value);
+    }
+    output
+}
+
+fn variable_length_argument_stub(argument: &VariableLengthArgument) -> String {
+    argument.name.clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::Arguments;
+
+    #[test]
+    fn function_stubs_with_variable_length() {
+        let function = Function {
+            name: "func".into(),
+            decorators: Vec::new(),
+            arguments: Arguments {
+                positional_only_arguments: vec![Argument {
+                    name: "posonly".into(),
+                    default_value: None,
+                }],
+                arguments: vec![Argument {
+                    name: "arg".into(),
+                    default_value: None,
+                }],
+                vararg: Some(VariableLengthArgument {
+                    name: "varargs".into(),
+                }),
+                keyword_only_arguments: vec![Argument {
+                    name: "karg".into(),
+                    default_value: None,
+                }],
+                kwarg: Some(VariableLengthArgument {
+                    name: "kwarg".into(),
+                }),
+            },
+        };
+        assert_eq!(
+            "def func(posonly, /, arg, *varargs, karg, **kwarg): ...",
+            function_stubs(&function)
+        )
+    }
+
+    #[test]
+    fn function_stubs_without_variable_length() {
+        let function = Function {
+            name: "afunc".into(),
+            decorators: Vec::new(),
+            arguments: Arguments {
+                positional_only_arguments: vec![Argument {
+                    name: "posonly".into(),
+                    default_value: Some("1".into()),
+                }],
+                arguments: vec![Argument {
+                    name: "arg".into(),
+                    default_value: Some("True".into()),
+                }],
+                vararg: None,
+                keyword_only_arguments: vec![Argument {
+                    name: "karg".into(),
+                    default_value: Some("\"foo\"".into()),
+                }],
+                kwarg: None,
+            },
+        };
+        assert_eq!(
+            "def afunc(posonly=1, /, arg=True, *, karg=\"foo\"): ...",
+            function_stubs(&function)
+        )
+    }
 }
